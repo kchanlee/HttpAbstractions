@@ -15,6 +15,11 @@ namespace Microsoft.AspNetCore.Builder
           Func<IDictionary<string, object>, Task>,
           Func<IDictionary<string, object>, Task>
         >>;
+    using AddMiddlewareEx = Action<Func<
+          IDictionary<string, object>,
+          Func<Task>,
+          Task
+        >>;
     using AppFunc = Func<IDictionary<string, object>, Task>;
     using CreateMiddleware = Func<
           Func<IDictionary<string, object>, Task>,
@@ -41,18 +46,7 @@ namespace Microsoft.AspNetCore.Builder
                     var app = middleware(exitMiddlware);
                     return httpContext =>
                     {
-                        // Use the existing OWIN env if there is one.
-                        IDictionary<string, object> env;
-                        var owinEnvFeature = httpContext.Features.Get<IOwinEnvironmentFeature>();
-                        if (owinEnvFeature != null)
-                        {
-                            env = owinEnvFeature.Environment;
-                            env[typeof(HttpContext).FullName] = httpContext;
-                        }
-                        else
-                        {
-                            env = new OwinEnvironment(httpContext);
-                        }
+                        var env = GetOrNewEnvironment(httpContext);
                         return app.Invoke(env);
                     };
                 };
@@ -60,6 +54,40 @@ namespace Microsoft.AspNetCore.Builder
             };
             // Adapt WebSockets by default.
             add(WebSocketAcceptAdapter.AdaptWebSockets);
+            return add;
+        }
+
+        public static AddMiddlewareEx UseOwinEx(this IApplicationBuilder builder)
+        {
+            if (builder == null)
+            {
+                throw new ArgumentNullException(nameof(builder));
+            }
+
+            AddMiddlewareEx add = middleware =>
+            {
+                Func<RequestDelegate, RequestDelegate> middleware1 = next1 =>
+                {
+                    return httpContext =>
+                    {
+                        var env = GetOrNewEnvironment(httpContext);
+                        Func<Task> next = () =>
+                        {
+                            return next1((HttpContext)env[typeof(HttpContext).FullName]);
+                        };
+
+                        return middleware(env, next);
+                    };
+                };
+                builder.Use(middleware1);
+            };
+            // Adapt WebSockets by default.
+            add((env, next) =>
+            {
+                AppFunc nextApp = _ => next();
+                return (WebSocketAcceptAdapter.AdaptWebSockets(nextApp))(env);
+            });
+
             return add;
         }
 
@@ -76,6 +104,24 @@ namespace Microsoft.AspNetCore.Builder
 
             pipeline(builder.UseOwin());
             return builder;
+        }
+
+        private static IDictionary<string, object> GetOrNewEnvironment(HttpContext httpContext)
+        {
+            // Use the existing OWIN env if there is one.
+            IDictionary<string, object> env;
+            var owinEnvFeature = httpContext.Features.Get<IOwinEnvironmentFeature>();
+            if (owinEnvFeature != null)
+            {
+                env = owinEnvFeature.Environment;
+                env[typeof(HttpContext).FullName] = httpContext;
+            }
+            else
+            {
+                env = new OwinEnvironment(httpContext);
+            }
+
+            return env;
         }
 
         public static IApplicationBuilder UseBuilder(this AddMiddleware app)
