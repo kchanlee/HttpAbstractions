@@ -157,6 +157,56 @@ namespace Microsoft.AspNetCore.Owin
             Assert.False(environment.ContainsKey("websocket.AcceptAlt"));
         }
 
+        [Fact]
+        public async Task UseOwinEx()
+        {
+            const string TestStringKey = "TestString";
+            var serviceProvider = new ServiceCollection().BuildServiceProvider();
+            var builder = new ApplicationBuilder(serviceProvider);
+            var context = new DefaultHttpContext();
+            context.Items[TestStringKey] = string.Empty;
+
+            builder.UseOwinEx(addToPipeline =>
+            {
+                addToPipeline((env, next) =>
+                {
+                    Assert.NotNull(next);
+                    var testString = (string)env[TestStringKey];
+                    Assert.Equal(string.Empty, testString);
+                    env[TestStringKey] = testString + "0";
+                    return next();
+                });
+                addToPipeline(async (env, next) =>
+                {
+                    Assert.NotNull(next);
+
+                    var testString = (string)env[TestStringKey];
+                    Assert.Equal("0", testString);
+                    env[TestStringKey] = testString + "1";
+
+                    await next();
+
+                    testString = (string)env[TestStringKey];
+                    Assert.Equal("012", testString);
+                    env[TestStringKey] = testString + "b";
+                });
+            });
+
+            builder.Use((ctx, next) =>
+            {
+                Assert.NotNull(next);
+                var testString = (string)ctx.Items[TestStringKey];
+                Assert.Equal("01", testString);
+                ctx.Items[TestStringKey] = testString + "2";
+                return next();
+            });
+
+            var app = builder.Build();
+            await app(context);
+
+            Assert.Equal("012b", (string)context.Items[TestStringKey]);
+        }
+
         private class FakeService
         {
         }
