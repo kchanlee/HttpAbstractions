@@ -66,18 +66,10 @@ namespace Microsoft.AspNetCore.Builder
 
             AddMiddlewareEx add = middleware =>
             {
-                Func<RequestDelegate, RequestDelegate> middleware1 = next1 =>
+                Func<HttpContext, Func<Task>, Task> middleware1 = (httpContext, next1) =>
                 {
-                    return httpContext =>
-                    {
-                        var env = GetOrNewEnvironment(httpContext);
-                        Func<Task> next = () =>
-                        {
-                            return next1((HttpContext)env[typeof(HttpContext).FullName]);
-                        };
-
-                        return middleware(env, next);
-                    };
+                    var env = GetOrNewEnvironment(httpContext);
+                    return middleware(env, next1);
                 };
                 builder.Use(middleware1);
             };
@@ -87,7 +79,6 @@ namespace Microsoft.AspNetCore.Builder
                 AppFunc nextApp = _ => next();
                 return (WebSocketAcceptAdapter.AdaptWebSockets(nextApp))(env);
             });
-
             return add;
         }
 
