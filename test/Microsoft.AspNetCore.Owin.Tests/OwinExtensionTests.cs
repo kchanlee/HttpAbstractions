@@ -10,17 +10,35 @@ using Microsoft.AspNetCore.Builder.Internal;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using System.Net.WebSockets;
 
 namespace Microsoft.AspNetCore.Owin
 {
+    using System.Threading;
     using AddMiddleware = Action<Func<
-          Func<IDictionary<string, object>, Task>,
-          Func<IDictionary<string, object>, Task>
-        >>;
+Func<IDictionary<string, object>, Task>,
+Func<IDictionary<string, object>, Task>
+>>;
     using AppFunc = Func<IDictionary<string, object>, Task>;
     using CreateMiddleware = Func<
           Func<IDictionary<string, object>, Task>,
           Func<IDictionary<string, object>, Task>
+        >;
+    using WebSocketAccept =
+        Action
+        <
+            IDictionary<string, object>, // WebSocket Accept parameters
+            Func // WebSocketFunc callback
+            <
+                IDictionary<string, object>, // WebSocket environment
+                Task // Complete
+            >
+        >;
+    using WebSocketAcceptAlt =
+        Func
+        <
+            WebSocketAcceptContext, // WebSocket Accept parameters
+            Task<WebSocket>
         >;
 
     public class OwinExtensionTests
@@ -166,6 +184,10 @@ namespace Microsoft.AspNetCore.Owin
             var context = new DefaultHttpContext();
             context.Items[TestStringKey] = string.Empty;
 
+            WebSocketAcceptAlt webSocketAcceptAlt = webSocketAcceptContext => Task.FromResult((WebSocket)new FakeWebSocket());
+            context.Items["websocket.AcceptAlt"] = webSocketAcceptAlt;
+            bool isWebSocketCallbackInvoked = false;
+
             builder.UseOwinEx(addToPipeline =>
             {
                 addToPipeline((env, next) =>
@@ -190,6 +212,17 @@ namespace Microsoft.AspNetCore.Owin
                     Assert.Equal("012", testString);
                     env[TestStringKey] = testString + "b";
                 });
+                addToPipeline(async (env, next) =>
+                {
+                    WebSocketAccept webSocketAccept = (WebSocketAccept)env["websocket.Accept"];
+                    webSocketAccept(null, env2 =>
+                    {
+                        isWebSocketCallbackInvoked = true;
+                        return Task.FromResult(0);
+                    });
+                    await next();
+                    env["owin.ResponseStatusCode"] = 101;
+                });
             });
 
             builder.Use((ctx, next) =>
@@ -205,10 +238,52 @@ namespace Microsoft.AspNetCore.Owin
             await app(context);
 
             Assert.Equal("012b", (string)context.Items[TestStringKey]);
+            Assert.True(isWebSocketCallbackInvoked);
         }
 
         private class FakeService
         {
+        }
+
+        private class FakeWebSocket : WebSocket
+        {
+            public override WebSocketCloseStatus? CloseStatus => throw new NotImplementedException();
+
+            public override string CloseStatusDescription => throw new NotImplementedException();
+
+            public override string SubProtocol => throw new NotImplementedException();
+
+            public override WebSocketState State => WebSocketState.Closed;
+
+            public override void Abort()
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override void Dispose()
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 }
