@@ -84,6 +84,16 @@ namespace Microsoft.AspNetCore.Builder
 
         public static IApplicationBuilder UseOwin(this IApplicationBuilder builder, Action<AddMiddleware> pipeline)
         {
+            return UseOwinHelp(builder, pipeline, b => b.UseOwin());
+        }
+
+        public static IApplicationBuilder UseOwinEx(this IApplicationBuilder builder, Action<AddMiddlewareEx> pipeline)
+        {
+            return UseOwinHelp(builder, pipeline, b => b.UseOwinEx());
+        }
+
+        private static IApplicationBuilder UseOwinHelp<T>(this IApplicationBuilder builder, Action<T> pipeline, Func<IApplicationBuilder, T> useOwin)
+        {
             if (builder == null)
             {
                 throw new ArgumentNullException(nameof(builder));
@@ -93,7 +103,7 @@ namespace Microsoft.AspNetCore.Builder
                 throw new ArgumentNullException(nameof(pipeline));
             }
 
-            pipeline(builder.UseOwin());
+            pipeline(useOwin(builder));
             return builder;
         }
 
