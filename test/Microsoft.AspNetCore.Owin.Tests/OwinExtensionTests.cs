@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Builder.Internal;
@@ -14,11 +15,10 @@ using Xunit;
 
 namespace Microsoft.AspNetCore.Owin
 {
-    using System.Threading;
     using AddMiddleware = Action<Func<
-Func<IDictionary<string, object>, Task>,
-Func<IDictionary<string, object>, Task>
->>;
+          Func<IDictionary<string, object>, Task>,
+          Func<IDictionary<string, object>, Task>
+        >>;
     using AppFunc = Func<IDictionary<string, object>, Task>;
     using CreateMiddleware = Func<
           Func<IDictionary<string, object>, Task>,
